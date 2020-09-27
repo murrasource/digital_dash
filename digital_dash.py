@@ -5,21 +5,41 @@ import sys
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QApplication
-import obd
+from obd import *
 
 # variable to tell if screen is on or off
 screen_state = 1
 
 # set connection to OBD-II device
 connection = obd.OBD()
-
+ 
 # read the text file containing the fuel level information
 # if your fuel sensor works (unlike mine), you don't need to do this. Instead, create a function to access the OBD fuel level
 # a file is used so that if the RasPi looses power or the app is exited, the fuel consumption will still remain
 
-text = open("~/Dashboard/.gallons.txt", "r")
+text = open("/home/pi/Dashboard/gallons.txt", "r")
 gallons = float(text.read())
 text.close()
+
+# make our own double-click enabled button
+class QDoublePushButton(QtWidgets.QPushButton):
+    doubleClicked = QtCore.pyqtSignal()
+    clicked = QtCore.pyqtSignal()
+
+    def __init__(self, *args, **kwargs):
+        QtWidgets.QPushButton.__init__(self, *args, **kwargs)
+        self.timer = QTimer()
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self.clicked.emit)
+        super().clicked.connect(self.checkDoubleClick)
+
+    @QtCore.pyqtSlot()
+    def checkDoubleClick(self):
+        if self.timer.isActive():
+            self.doubleClicked.emit()
+            self.timer.stop()
+        else:
+            self.timer.start(250)
 
 
 # the real meat of the operation
@@ -33,7 +53,7 @@ class Ui_MainWindow(object):
         font = QtGui.QFont()
         font.setFamily("High Tower Text")
         MainWindow.setFont(font)
-        MainWindow.setCursor(QtGui.QCursor(QtCore.Qt.BlankCursor))
+        #MainWindow.setCursor(QtGui.QCursor(QtCore.Qt.BlankCursor))
         MainWindow.setStyleSheet("background-color: rgb(29, 29, 29); border-color: rgb(232, 232, 232);")
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
@@ -41,14 +61,14 @@ class Ui_MainWindow(object):
         # FRIZ LOGO
         self.friz = QtWidgets.QLabel(self.centralwidget)
         self.friz.setGeometry(QtCore.QRect(225, 30, 350, 50))
-        self.friz.setPixmap(QtGui.QPixmap("~/logo.png"))
+        self.friz.setPixmap(QtGui.QPixmap("/home/pi/Dashboard/logo.png"))
         self.friz.setScaledContents(True)
         self.friz.setObjectName("friz")
 
 
         # SPEED WIDGET
         self.spedometer = QtWidgets.QLabel(self.centralwidget)
-        self.spedometer.setGeometry(QtCore.QRect(325, 140, 200, 200))
+        self.spedometer.setGeometry(QtCore.QRect(347, 140, 200, 200))
         font = QtGui.QFont()
         font.setFamily("Javanese Text")
         font.setPointSize(62)
@@ -79,7 +99,7 @@ class Ui_MainWindow(object):
 
         # GAL LABEL
         self.gal_label = QtWidgets.QLabel(self.centralwidget)
-        self.gal_label.setGeometry(QtCore.QRect(10, 420, 81, 51))
+        self.gal_label.setGeometry(QtCore.QRect(10, 400, 81, 51))
         font = QtGui.QFont()
         font.setFamily("Javanese Text")
         font.setPointSize(18)
@@ -89,7 +109,7 @@ class Ui_MainWindow(object):
 
         # MI LABEL
         self.mi_label = QtWidgets.QLabel(self.centralwidget)
-        self.mi_label.setGeometry(QtCore.QRect(710, 420, 81, 51))
+        self.mi_label.setGeometry(QtCore.QRect(710, 400, 81, 51))
         font = QtGui.QFont()
         font.setFamily("Javanese Text")
         font.setPointSize(18)
@@ -143,7 +163,7 @@ class Ui_MainWindow(object):
         self.gal.setObjectName("gal")
 
         # REFILL BUTTON
-        self.refill_button = QtWidgets.QPushButton(self.centralwidget)
+        self.refill_button = QDoublePushButton(self.centralwidget)
         self.refill_button.setGeometry(QtCore.QRect(334, 385, 132, 45))
         font = QtGui.QFont()
         font.setFamily("Javanese Text")
@@ -154,9 +174,13 @@ class Ui_MainWindow(object):
         self.refill_button.setDefault(False)
         self.refill_button.setFlat(False)
         self.refill_button.setObjectName("refill_button")
+        # click once to refill
         self.refill_button.clicked.connect(self.refill)
+        # double click to exit application
+        self.refill_button.doubleClicked.connect(self.fullscreen)
 
 
+        # general settings
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 800, 22))
@@ -174,18 +198,18 @@ class Ui_MainWindow(object):
         global gallons
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "Dashboard"))
-        self.spedometer.setText(_translate("MainWindow", "0"))
+        self.spedometer.setText(_translate("MainWindow", "..."))
         self.rpm_label.setText(_translate("MainWindow", "RPM"))
         self.load_label.setText(_translate("MainWindow", "LOAD"))
         self.gal_label.setText(_translate("MainWindow", "GAL"))
         self.mi_label.setText(_translate("MainWindow", "MI"))
-        self.tachometer.setText(_translate("MainWindow", "0"))
-        self.load_meter.setText(_translate("MainWindow", "0%"))
-        self.mi.setText(_translate("MainWindow", "750"))
-        self.gal.setText(_translate("MainWindow", str(gallons)))
+        self.tachometer.setText(_translate("MainWindow", "..."))
+        self.load_meter.setText(_translate("MainWindow", "..."))
+        self.mi.setText(_translate("MainWindow", "..."))
+        self.gal.setText(_translate("MainWindow", "..."))
         self.refill_button.setText(_translate("MainWindow", "REFILL"))
     
-    # warn driver when fuel level is low by changing the color of the refill button
+    # warn when fuel level is low by changing the color of the refill button
     def warning(self):
         global gallons
         if float(gallons) <= 3.5:
@@ -197,7 +221,7 @@ class Ui_MainWindow(object):
     def refill(self):
         global gallons
         gallons = 26.0
-        text = open("~/Dashboard/.gallons.txt", "w")
+        text = open("/home/pi/Dashboard/gallons.txt", "w")
         text.write(str(gallons))
         text.close()
 
@@ -247,7 +271,7 @@ class Ui_MainWindow(object):
         # update text document storing fuel level
         gallons -= burnt
         gallons = str(gallons)
-        text = open("~/Dashboard/.gallons.txt", "w")
+        text = open("/home/pi/Dashboard/gallons.txt", "w")
         text.write(gallons)
         text.close()
 
@@ -285,23 +309,24 @@ class Ui_MainWindow(object):
     # turn screen off when engine is off to save battery
     def screen(self):
         global screen_state
-        cmd = obd.commands.RPM
-        response = connection.query(cmd)
-        rpm = float(response.value.magnitude)
+        global connection
         if screen_state == 1:
-            if rpm == 0:
+            if connection.status() == OBDStatus.OBD_CONNECTED:
                 screen_state = 0
                 os.system("xset dpms force off")
             else:
                 pass
         else:
-            if rpm != 0:
+            if connection.status() == OBDStatus.CAR_CONNECTED:
                 screen_state = 1
-                import os
                 os.system("xset dpms force on")
             else:
                 pass
-  
+    
+    # enter or exit fullscreen
+    def fullscreen(self):
+        sys.exit()
+
     # update all values
     def update(self):
         gallons = self.gas()
@@ -318,16 +343,41 @@ class Ui_MainWindow(object):
         self.refill_button.setStyleSheet(warning)
         self.screen()
 
+    # if connection is not working
+    def not_connected(self):
+        global gallons
+        warning = self.warning()
+        distance = self.distance()
+        self.spedometer.setText("...")
+        self.gal.setText(str(gallons))
+        self.tachometer.setText(" ?")
+        self.mi.setText(str(distance))
+        self.load_meter.setText("? ")
+        self.refill_button.setStyleSheet(warning)
+        self.screen()
+
+    # try connecting to a device
+    def connect(self):
+        global connection
+        connection = obd.OBD()
+
+
 # call our main loop
 if __name__ == "__main__":
-    import sys
     app = QtWidgets.QApplication(sys.argv)
     MainWindow = QtWidgets.QMainWindow()
     ui = Ui_MainWindow()
     ui.setupUi(MainWindow)
-    MainWindow.show()
+    MainWindow.showFullScreen()
+    # try connecting to OBD every 3 seconds
+    if connection.status() != OBDStatus.ELM_CONNECTED:
+        timer = QTimer()
+        timer.timeout.connect(ui.not_connected)
+        timer.timeout.connect(ui.connect)
+        timer.start(3000)
     # call the update function every 100 miliseconds
-    timer = QTimer()
-    timer.timeout.connect(ui.update)
-    timer.start(100)
+    else:
+        timer = QTimer()
+        timer.timeout.connect(ui.update)
+        timer.start(100)
     sys.exit(app.exec_())
