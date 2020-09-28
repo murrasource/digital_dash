@@ -64,6 +64,6 @@ Now you can double click on the digital_dash.py folder on your Desktop to execut
 ## Usage and Customization
 As previously stated, my motivation for coding this was because my gas sensor broke and I didn't want to pay for the $600-$800 repair. You will see in my code that I calculate the amount of fuel left in the tank based on some simple stoichiometry. This would be incredibly simple to replace with OBD-II queries if your car's gas sensor works. Take a look here (https://python-obd.readthedocs.io/en/latest/Command%20Tables/) for a list of all the different queries the OBD library supports.
 
-Also, feel free to have fun and customize what you want for the logo.png file. It should autoscale to the correct fit. I did my car's name in TESLA font and it looks pretty cool, if I may say so myself.
+Also, feel free to have fun and customize what you want for the logo.png file. It should autoscale to the correct fit. I did my car's name in Tesla font and it looks pretty cool, if I may say so myself. The example I have on the GitHub is the Lucid Motors logo from the company's Twitter post.
 
-**DON'T PANIC:** To exit fullscreen, just double click the refill button.
+**IMPORTANT TIP:** To exit fullscreen, just double click the refill button.
