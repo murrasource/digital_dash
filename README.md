@@ -12,7 +12,7 @@ The real guts of this operation is in the OBD-II port of pretty much every car s
 Every tenth of a second, the program queries the OBD port for the data I want through the obd python library. Dependencies are also listed below.
 
 ## Hardware
-1. Raspberry Pi Zero W (Note: if you use the display I chose, you will need the DPIO header pins on the Pi. It makes a very compact and easily mountable assembly.)
+1. Raspberry Pi Zero W (Note: if you use the display I chose, you will need the GPIO header pins on the Pi. It makes a very compact and easily mountable assembly.)
 2. Touchscreen Display of your choice. I like the hyperpixel4 from Pimoroni. (https://shop.pimoroni.com/products/hyperpixel-4?variant=12569485443155)
 3. Bluetooth ELM327 OBD-II Device (https://www.amazon.com/gp/product/B011NSX27A/ref=ppx_yo_dt_b_asin_title_o01_s00?ie=UTF8&psc=1)
 4. OBD-II port splitter (https://www.amazon.com/gp/product/B0711LGRGQ/ref=ppx_yo_dt_b_asin_title_o00_s00?ie=UTF8&psc=1)
@@ -41,6 +41,9 @@ There have been some issues connecting the Raspberry Pi to ELM327 Devices. You m
     ```
 4. `reboot`
 5. `sudo rfcomm connect 0 <mac_address> 1` You can get the MAC Address by using `bluetoothctl`'s `devices` command.
+6. `sudo rfcomm bind <mac_address> hci0`
+7. `reboot`
+
 Many thanks to this website for helping me out with this part: https://www.lukinotes.com/2018/10/raspberry-pi-bluetooth-connection.html
 
 That should do the trick for setting up bluetooth. To double check, try opening python in the terminal, and run this:
@@ -50,6 +53,8 @@ connection = obd.OBD()
 connection.status()
 ```
 It will return a string telling you the status of the connection. Go here for more information: https://python-obd.readthedocs.io/en/latest/Connections/.
+
+**NOTE:** If you still have issues, try forgetting the bluetooth device and then reconnecting, and running the `rfcomm bind` command again. I had some issues the first try around, but this worked for me.
 
 ## Code Setup
 Run these commands in the terminal
