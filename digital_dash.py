@@ -2,31 +2,10 @@
 
 import os
 import sys
-import random
+import subprocess as sp
+import time
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QApplication
 from obd import *
-
-
-# connect to the rfcomm channel
-# os.system('sudo rfcomm connect 0 00:1D:A5:06:25:63')
-
-i = 0
-
-# variable to tell if screen is on or off
-screen_state = 1
-
-# set connection to OBD-II device
-connection = obd.OBD()
- 
-# read the text file containing the fuel level information
-# if your fuel sensor works (unlike mine), you don't need to do this. Instead, create a function to access the OBD fuel level
-# a file is used so that if the RasPi looses power or the app is exited, the fuel consumption will still remain
-
-text = open("/home/pi/Dashboard/gallons.txt", "r")
-gallons = float(text.read())
-text.close()
 
 # make our own double-click enabled button
 class QDoublePushButton(QtWidgets.QPushButton):
@@ -35,7 +14,7 @@ class QDoublePushButton(QtWidgets.QPushButton):
 
     def __init__(self, *args, **kwargs):
         QtWidgets.QPushButton.__init__(self, *args, **kwargs)
-        self.timer = QTimer()
+        self.timer = QtCore.QTimer()
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.clicked.emit)
         super().clicked.connect(self.checkDoubleClick)
@@ -60,7 +39,7 @@ class Ui_MainWindow(object):
         font = QtGui.QFont()
         font.setFamily("High Tower Text")
         MainWindow.setFont(font)
-        MainWindow.setCursor(QtGui.QCursor(QtCore.Qt.BlankCursor))
+        #MainWindow.setCursor(QtGui.QCursor(QtCore.Qt.BlankCursor))
         MainWindow.setStyleSheet("background-color: rgb(29, 29, 29); border-color: rgb(232, 232, 232);")
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
@@ -218,191 +197,139 @@ class Ui_MainWindow(object):
     
     # warn when fuel level is low by changing the color of the refill button
     def warning(self):
-        global gallons
-        if float(gallons) <= 3.5:
-            return "color: rgb(248,248,248); background-color: rgb(245, 27, 27);"
+        text = open("/home/pi/Dashboard/gallons.txt", "r")
+        gallons = float(text.read())
+        text.close()
+        if gallons <= 3.5:
+            return "color: rgb(248, 248, 248); background-color: rgb(245, 27, 27);"
         else:
-            return "color: rgb(248,248,248);"
+            return "color: rgb(248,248,248); background-color: rgb(29, 29, 29);"
 
     # set fuel level to max (not necessary if your fuel indicator is functional)
     def refill(self):
-        global gallons
         gallons = 26.0
         text = open("/home/pi/Dashboard/gallons.txt", "w")
         text.write(str(gallons))
         text.close()
 
-    # calculate gasoline usage and return new fuel level
-    def gas(self):
-        # fetch the global gallons variable we read from the text document
-        global gallons
-        gallons = float(gallons)
-
-        # function to calculate fuel burnt
-        def burn(trim, air_mass):
-            # adjust air-to-fuel ratio for bank 1
-            if trim == 0:
-                ratio = 14.7
-            elif trim > 0:
-                ratio = 14.7 * (1 + trim)
-            else:
-                ratio = 14.7 * (1 - trim)
-
-            # calculate fuel burnt
-            fuel_burnt_grams = air_mass / ratio
-            fuel_burnt_mL = fuel_burnt_grams / 0.75
-            fuel_burnt_gallons = fuel_burnt_mL / 3785.41
-
-            return float(fuel_burnt_gallons)
-        
-
-        # query OBD for short fuel trim from engine bank 1
-        cmd = obd.commands.SHORT_FUEL_TRIM_1
-        response = connection.query(cmd)
-        trim_1 = float(response.value.magnitude / 100)
-
-        # query OBD for short fuel trim from engine bank 2
-        cmd = obd.commands.SHORT_FUEL_TRIM_2
-        response = connection.query(cmd)
-        trim_2 = float(response.value.magnitude / 100)
-        
-        # query OBD for Air Flow Rate (MAF) given in grams/second
-        cmd = obd.commands.MAF
-        response = connection.query(cmd)
-        # multiply response by 0.1 because the last update happened 0.1 seconds ago
-        air_mass = float(response.value.magnitude * 0.1)
-
-        # add fuel burnt by each engine bank
-        burnt = burn(trim_1, air_mass) + burn(trim_2, air_mass)
-
-        # update text document storing fuel level
-        gallons -= burnt
-        gallons = str(gallons)
-        text = open("/home/pi/Dashboard/gallons.txt", "w")
-        text.write(gallons)
-        text.close()
-
-        # rounding for the display (and not for the calculations) ensures more accuracy
-        integer = gallons.split(".")[0]
-        decimal = gallons.split(".")[1][0:2]
-        gallons = integer + "." + decimal
-
-        return gallons
-    
     # query speed from OBD
     def speed(self):
         cmd = obd.commands.SPEED
         response = connection.query(cmd)
-        return str(response.value.magnitude)
+        return str(response.value.to('mph').magnitude).split(".")[0]
     
     # query RPM from OBD
     def rpm(self):
         cmd = obd.commands.RPM
         response = connection.query(cmd)
-        return str(response.value.magnitude)
+        return str(response.value.magnitude).split(".")[0]
     
     # calculate estimated fuel range
     def distance(self):
-        global gallons
-        text = str(float(gallons) * 17.0)
-        return text.split(".")[0]
+        text = open("/home/pi/Dashboard/gallons.txt", "r")
+        gallons = float(text.read())
+        text.close()
+        t = str(gallons * 12.12)
+        return t.split(".")[0]
     
     # query engine load from OBD
     def load(self):
         cmd = obd.commands.ENGINE_LOAD
         response = connection.query(cmd)
-        return str(response.value)
+        return str(response.value.magnitude).split(".")[0] + "%"
 
-    # turn screen off when engine is off to save battery
-    def screen(self):
-        global screen_state
-        global connection
-        if connection.status() == OBDStatus.OBD_CONNECTED:
-            screen_state = 0
-            os.system("xset dpms force off")
-        else:
-            os.system("xset dpms force on")
+    # calculate gasoline usage and return new fuel level
+    def gas(self):
+        # fetch the global gallons variable we read from the text document
+        text = open("/home/pi/Dashboard/gallons.txt", "r+")
+        g = float(text.read())
 
+        # speed-based burn function
+        def burn(speed):
+            gpm = 0.0825
+            miles_traveled = speed / 36000
+            if miles_traveled == 0:
+                miles_traveled = 0.000001
+            fuel_burnt = gpm * miles_traveled
+            return float(fuel_burnt)
+
+        
+        burnt = burn(float(self.speed()))
+
+        # update text document storing fuel level
+        g -= burnt
+        g = str(g)
+        text.seek(0)
+        text.write(g)
+        text.close()
+
+        # rounding for the display (and not for the calculations) ensures more accuracy
+        integer = g.split(".")[0]
+        decimal = g.split(".")[1][0:2]
+        g = integer + "." + decimal
+
+        return g
     
     # enter or exit fullscreen
     def fullscreen(self):
         sys.exit()
-
+    
     # update all values
     def update(self):
-        gallons = self.gas()
-        speed = self.speed()
-        rpm = self.rpm()
-        distance = self.distance()
-        load = self.load()
-        warning = self.warning()
-        self.spedometer.setText(speed)
-        self.gal.setText(gallons)
-        self.tachometer.setText(rpm)
-        self.mi.setText(distance)
-        self.load_meter.setText(load)
-        self.refill_button.setStyleSheet(warning)
-        self.screen()
-
-    # if connection is not working
-    def not_connected(self):
-        global gallons
-        warning = self.warning()
-        distance = self.distance()
-        self.spedometer.setText("...")
-        self.gal.setText(str(gallons))
-        self.tachometer.setText(" ?")
-        self.mi.setText(str(distance))
-        self.load_meter.setText("? ")
-        self.refill_button.setStyleSheet(warning)
-        self.screen()
-
-    # try connecting to a device
-    def connect(self):
-        global connection
-        connection = obd.OBD()
-
-    # car off mode but connected mode
-    def car_off(self):
-        global gallons
-        global i
-        if i > 7:
-            i = 0
-        else:
-            pass
-        options = ['-','\\','|','/','-','\\','|','/']
-        warning = self.warning()
-        distance = self.distance()
-        self.spedometer.setText(options[i])
-        self.gal.setText(str(gallons))
-        self.tachometer.setText(options[i])
-        self.mi.setText(str(distance))
-        self.load_meter.setText(options[i])
-        self.refill_button.setStyleSheet(warning)
-        self.screen()
-        i += 1
+        try:
+            gallons = self.gas()
+            speed = self.speed()
+            rpm = self.rpm()
+            distance = self.distance()
+            load = self.load()
+            warning = self.warning()
+            self.spedometer.setText(speed)
+            self.gal.setText(gallons)
+            self.tachometer.setText(rpm)
+            self.mi.setText(distance)
+            self.load_meter.setText(load)
+            self.refill_button.setStyleSheet(warning)
+            os.system("xset dpms force on")
+        except:
+            print("Car is turned off")
+            os.system("xset dpms force off")
+            time.sleep(3)
+            global connection
+            connection = obd.OBD()
+            # connection = obd.OBD(portstr='/dev/pts/2')
 
 
 # call our main loop
 if __name__ == "__main__":
+    # make sure bluetooth ELM327 device is connected
+    stdoutdata = sp.getoutput('hcitool con')
+    while '00:1D:A5:06:25:63' not in stdoutdata.split():
+        print('ELM327 Device Not Yet Paired...')
+        os.system('sudo systemctl start bluetooth && sudo rfkill unblock bluetooth && sudo bluetoothctl pair 00:1D:A5:06:25:63 && sudo bluetoothctl trust 00:1D:A5:06:25:63 && echo Paired')
+        cmd = "sudo rfcomm connect /dev/rfcomm0 {} {} &".format('00:1D:A5:06:25:63', 1)
+        conn = sp.Popen(cmd, shell=True)
+        stdoutdata = sp.getoutput('hcitool con')
+    else:
+        pass
+    
+    connection = obd.OBD()
+
+    while connection.status() not in [OBDStatus.CAR_CONNECTED, OBDStatus.OBD_CONNECTED, OBDStatus.ELM_CONNECTED]:
+        print('Waiting for OBD-II Connection to be Established...')
+        time.sleep(3)
+        connection = obd.OBD()
+        # connection = obd.OBD(portstr='/dev/pts/2')
+    else:
+        pass
+    
     app = QtWidgets.QApplication(sys.argv)
     MainWindow = QtWidgets.QMainWindow()
     ui = Ui_MainWindow()
     ui.setupUi(MainWindow)
     MainWindow.showFullScreen()
-    # call the update function every 100 miliseconds
-    if connection.status() == OBDStatus.CAR_CONNECTED:
-        timer = QTimer()
-        timer.timeout.connect(ui.update)
-        timer.start(100)
-    elif connection.status() == OBDStatus.OBD_CONNECTED or OBDStatus.ELM_CONNECTED:
-        timer = QTimer()
-        timer.timeout.connect(ui.car_off)
-        timer.start(100)
-    # try connecting to OBD every 3 seconds
-    else: 
-        timer = QTimer()
-        timer.timeout.connect(ui.not_connected)
-        timer.timeout.connect(ui.connect)
-        timer.start(3000)
+    
+    timer = QtCore.QTimer()
+    timer.timeout.connect(ui.update)
+    timer.start(100)
+    
     sys.exit(app.exec_())
